@@ -2,17 +2,27 @@ import streamlit as st
 
 st.set_page_config(page_title="Apple Style Calculator", layout="centered")
 
-st.markdown(
-    """
+# Inject Apple-style CSS
+st.markdown("""
     <style>
-    .calculator {
-        background-color: #000;
-        border-radius: 20px;
-        padding: 20px;
-        max-width: 300px;
-        margin: auto;
+    .stButton > button {
+        height: 60px;
+        width: 60px;
+        border-radius: 50%;
+        font-size: 24px;
+        margin: 4px;
+        border: none;
+        background-color: #333;
+        color: white;
     }
-    .display {
+    .stButton > button.operator {
+        background-color: #f39c12;
+    }
+    .stButton > button.function {
+        background-color: #a5a5a5;
+        color: black;
+    }
+    .display-box {
         background-color: #1c1c1c;
         color: white;
         font-size: 48px;
@@ -20,52 +30,20 @@ st.markdown(
         padding: 20px;
         border-radius: 10px;
         margin-bottom: 10px;
+        height: 80px;
     }
     .button-row {
         display: flex;
-        margin-bottom: 10px;
-    }
-    .button {
-        flex: 1;
-        font-size: 24px;
-        padding: 20px;
-        margin: 2px;
-        border: none;
-        border-radius: 50%;
-        background-color: #333;
-        color: white;
-        cursor: pointer;
-    }
-    .button.operator {
-        background-color: #f39c12;
-        color: white;
-    }
-    .button.function {
-        background-color: #a5a5a5;
-        color: black;
-    }
-    .button.zero {
-        flex: 2;
-        border-radius: 50px;
-        text-align: left;
-        padding-left: 35px;
+        justify-content: center;
     }
     </style>
-    """,
-    unsafe_allow_html=True
-)
+""", unsafe_allow_html=True)
 
-# Initialize session state
+# Session state
 if "expression" not in st.session_state:
     st.session_state.expression = ""
 
-# Layout using HTML (Streamlit doesn't support full grid-style UI)
-def render_button(label, css_class="", span2=False):
-    if st.button(label, key=label, use_container_width=True):
-        handle_input(label)
-    return f'<button class="button {css_class}{" zero" if span2 else ""}">{label}</button>'
-
-# Handle logic
+# Logic
 def handle_input(label):
     if label == "C":
         st.session_state.expression = ""
@@ -79,33 +57,24 @@ def handle_input(label):
             st.session_state.expression = ""
         st.session_state.expression += label
 
-# Display calculator
-st.markdown('<div class="calculator">', unsafe_allow_html=True)
-st.markdown(f'<div class="display">{st.session_state.expression or "0"}</div>', unsafe_allow_html=True)
+# Display
+st.markdown(f"<div class='display-box'>{st.session_state.expression or '0'}</div>", unsafe_allow_html=True)
 
 # Button layout
-buttons = [
+button_rows = [
     [("C", "function"), ("", ""), ("", ""), ("/", "operator")],
     [("7", ""), ("8", ""), ("9", ""), ("*", "operator")],
     [("4", ""), ("5", ""), ("6", ""), ("-", "operator")],
     [("1", ""), ("2", ""), ("3", ""), ("+", "operator")],
-    [("0", "", True), (".", ""), ("=", "operator")]
+    [("0", ""), (".", ""), ("=", "operator")],
 ]
 
-for row in buttons:
-    cols = st.columns([2 if span else 1 for _, _, *span in row])
-    for col, (label, css_class, *span) in zip(cols, row):
+for row in button_rows:
+    cols = st.columns(4)
+    for i, (label, style) in enumerate(row + [("", "")] * (4 - len(row))):  # pad if short row
         if label:
-            with col:
-                st.markdown(
-                    f"""
-                    <form action="" method="post">
-                        <input type="hidden" name="button" value="{label}">
-                        <button type="submit" class="button {css_class}{' zero' if span else ''}">{label}</button>
-                    </form>
-                    """,
-                    unsafe_allow_html=True
-                )
-        else:
-            col.empty()
-st.markdown("</div>", unsafe_allow_html=True)
+            btn_label = f"<span class='{style}'>{label}</span>"
+            with cols[i]:
+                if st.button(label, key=label):
+                    handle_input(label)
+
