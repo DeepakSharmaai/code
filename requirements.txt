@@ -1,3 +1,5 @@
 streamlit
 openai
-PyYAML
+PyMuPDF
+python-docx
+python-dotenv
