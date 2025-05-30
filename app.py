@@ -1,28 +1,84 @@
 import streamlit as st
-from summarizer import parse_openapi, generate_summary
+import os
+import fitz  # PyMuPDF
+import docx
+from io import StringIO
+from openai import OpenAI
+from openai import OpenAIError
 
-st.set_page_config(page_title="API Doc Summarizer", layout="centered")
+# --- Streamlit UI Setup ---
+st.set_page_config(page_title="📄 Document Summarizer", layout="wide")
+st.title("📄 Document Summarizer using OpenAI")
 
-st.title("📄 API Doc Summarizer")
-st.markdown("Upload your OpenAPI (Swagger) YAML file or paste it below:")
+# --- API Key Input ---
+api_key = st.secrets["OPENAI_API_KEY"] or st.text_input("Enter your OpenAI API Key", type="password")
+client = OpenAI(api_key=api_key) if api_key else None
 
-# Upload or paste OpenAPI YAML
-uploaded_file = st.file_uploader("Upload OpenAPI YAML", type=["yaml", "yml"])
-yaml_input = st.text_area("Or paste OpenAPI YAML here")
+# --- File Upload ---
+uploaded_file = st.file_uploader("Upload a file (PDF, DOCX, or TXT)", type=["pdf", "docx", "txt"])
 
+# --- File Parsing Functions ---
+def extract_text_from_pdf(file):
+    try:
+        doc = fitz.open(stream=file.read(), filetype="pdf")
+        return "\n".join([page.get_text() for page in doc])
+    except Exception as e:
+        st.error(f"PDF extraction error: {e}")
+        return ""
+
+def extract_text_from_docx(file):
+    try:
+        doc = docx.Document(file)
+        return "\n".join([para.text for para in doc.paragraphs])
+    except Exception as e:
+        st.error(f"DOCX extraction error: {e}")
+        return ""
+
+def extract_text_from_txt(file):
+    try:
+        return file.read().decode("utf-8")
+    except Exception as e:
+        st.error(f"TXT extraction error: {e}")
+        return ""
+
+# --- Summarization Function using OpenAI v1.x ---
+def summarize_text(text, model="gpt-4.1-mini", max_tokens=300):
+    if not text.strip():
+        return "No content to summarize."
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that summarizes documents."},
+                {"role": "user", "content": f"Please summarize the following:\n\n{text[:8000]}"}
+            ],
+            max_tokens=max_tokens,
+            temperature=0.5
+        )
+        return response.choices[0].message.content.strip()
+    except OpenAIError as e:
+        return f"OpenAI API error: {e}"
+
+# --- Main App Logic ---
 if uploaded_file:
-    yaml_str = uploaded_file.read().decode("utf-8")
-elif yaml_input:
-    yaml_str = yaml_input
-else:
-    yaml_str = ""
+    file_type = uploaded_file.type
+    if "pdf" in file_type:
+        full_text = extract_text_from_pdf(uploaded_file)
+    elif "word" in file_type:
+        full_text = extract_text_from_docx(uploaded_file)
+    elif "text" in file_type:
+        full_text = extract_text_from_txt(uploaded_file)
+    else:
+        full_text = ""
 
-if yaml_str and st.button("Summarize API"):
-    with st.spinner("Parsing and summarizing..."):
-        parsed = parse_openapi(yaml_str)
-        if parsed:
-            summary = generate_summary(parsed)
-            st.success("✅ Summary generated")
-            st.text_area("📘 API Summary", summary, height=300)
-        else:
-            st.error("❌ Could not parse the YAML. Please check the syntax.")
+    if full_text:
+        st.subheader("📃 Extracted Text")
+        st.text_area("Document Preview", full_text[:2000], height=300)
+
+        if client and st.button("🔍 Summarize"):
+            with st.spinner("Summarizing with GPT..."):
+                summary = summarize_text(full_text)
+                st.success("✅ Summary")
+                st.write(summary)
+    else:
+        st.error("Could not extract any text.")
